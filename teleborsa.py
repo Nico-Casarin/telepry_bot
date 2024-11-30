@@ -11,21 +11,23 @@ import time
 import os
 
 def load_storage_data(storage_path):
-    ### Load old news
     if os.path.exists(storage_path):
         return pl.read_parquet(storage_path)
-    return pl.DataFrame([]) ### Empty df is storage is not there
+    return pl.DataFrame([])
 
 
 def save_storage_data(storage_path, data):
-    ### Save updated storage with new news
     data.write_parquet(storage_path)
 
 def find_new_news(current_news, previous_news):
     if not previous_news.is_empty():
-        latest_date = previous_news['date'].max()
-        return current_news.filter(pl.col('date') > latest_date)
+        return current_news.join(
+            previous_news,
+            on=["company", "news", "link", "date"],
+            how="anti"
+        )
     return current_news
+
 
 def wait_for_page_to_load(driver, timeout=30):
     ###Wait until the page is fully loaded
@@ -40,7 +42,7 @@ def init_driver(url):
     driver = webdriver.Firefox(options = firefox_options)
     wait = WebDriverWait(driver, 90)
 
-    try: 
+    try:
         driver.get(url)
 
         input_field = wait.until(EC.visibility_of_element_located((By.ID, 'edit-titolo')))
@@ -50,19 +52,9 @@ def init_driver(url):
         search_button = wait.until(EC.element_to_be_clickable((By.ID, 'edit-submit-search-news')))
         search_button.click()
 
-        #wait_for_page_to_load(driver)
         print('waiting')
         time.sleep(5)
-        
         elements = driver.find_elements(By.CLASS_NAME, "views-row")
-        #wait_for_page_to_load(driver)
-
-        #print(type(elements))
-        #print(len(elements))
-        #print(elements)
-
-        #elements = wait.until(EC.presence_of_all_elements_located(By.CLASS_NAME, 'views-row'))
-
         data = []
 
         for element in elements:
@@ -79,28 +71,45 @@ def init_driver(url):
     finally:
         driver.quit()
 
-
-def news():
-    storage_path = 'news.parquet'
-    previous_news = load_storage_data(storage_path)
-    #print(previous_news.head(3))
-
-    url = "https://www.emarketstorage.it/it/comunicati-finanziari"
+def collect(url, previous_news):
     current_news = init_driver(url)
 
     new_news = find_new_news(current_news, previous_news)
-    print(new_news)
 
-    if not new_news.is_empty():
-        rows = new_news
-        rows = rows.sort('date')
-        updated_data = pl.concat([previous_news,
-                                  new_news]).unique(subset=['company','news','link','date'])
-        updated_data = updated_data.sort('date', descending=True)
-        updated_data.write_parquet(storage_path)
-        return(rows)
+    return new_news.sort('date') if not new_news.is_empty() else pl.DataFrame(
+            [],
+            schema={"company": pl.Utf8, "news": pl.Utf8, "link": pl.Utf8, "date": pl.Datetime}
+        )
+
+def news():
+    urls = ["https://www.emarketstorage.it/it/comunicati-finanziari", "https://www.emarketstorage.it/it/documenti"]
+    all_new_news = pl.DataFrame([])
+    storage_path = 'news.parquet'
+
+    previous_news = load_storage_data(storage_path)
+    print(previous_news.head(5))
+
+    for url in urls:
+        print(f"Processing URL: {url}")
+        new_news = collect(url, previous_news)
+        print(new_news)
+        if not new_news.is_empty():
+            all_new_news = pl.concat([all_new_news, new_news])
+    #print(f'all new news : {all_new_news}')
+    if not all_new_news.is_empty():
+        updated_storage = pl.concat([previous_news, all_new_news]).unique(subset=['company', 'news',
+                                                                                  'link',
+                                                                                  'date']).sort('date',
+                                                                                               descending=True)
+        print(f'updated is: {updated_storage}')
+        save_storage_data(storage_path, updated_storage)
+        print(all_new_news)
+        return(all_new_news)
     else:
-        return("no news available!")
+        print("No new news to save.")
+        return pl.DataFrame([],
+            schema={"company": pl.Utf8, "news": pl.Utf8, "link": pl.Utf8, "date": pl.Datetime}
+        )
 
 
 if __name__=="__main__":

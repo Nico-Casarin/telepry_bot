@@ -107,9 +107,10 @@ async def update_news(update: Update, context: ContextTypes.DEFAULT_TYPE, auto=F
 
     df = news()
     try:
-        for row in df.iter_rows(named=True):
-            messaggio = (f"{row['date']} -- {row['news']} -- {row['link']}")
-            await mex(update, context, messaggio)
+        if not df.is_empty():
+            for row in df.iter_rows(named=True):
+                messaggio = (f"{row['date']} -- {row['news']} -- {row['link']}")
+                await mex(update, context, messaggio)
     except:
         if auto == False:
             await mex(update, context, "Now updated news avaiable!")
