@@ -2,9 +2,12 @@ import polars as pl
 
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.firefox_profile import FirefoxProfile
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+
+from fake_useragent import UserAgent
 
 import time
 
@@ -15,6 +18,11 @@ def load_storage_data(storage_path):
         return pl.read_parquet(storage_path)
     return pl.DataFrame([])
 
+def ua_picker():
+    ua = UserAgent()
+    user_agent = ua.random
+    print(user_agent)
+    return(user_agent)
 
 def save_storage_data(storage_path, data):
     data.write_parquet(storage_path)
@@ -37,8 +45,11 @@ def wait_for_page_to_load(driver, timeout=30):
 
 
 def init_driver(url):
+    firefox_profile = FirefoxProfile()
+    firefox_profile.set_preference("general.useragent.override", ua_picker())
     firefox_options = Options()
     firefox_options.add_argument('--headless')
+    firefox_options.profile = firefox_profile
     driver = webdriver.Firefox(options = firefox_options)
     wait = WebDriverWait(driver, 90)
 

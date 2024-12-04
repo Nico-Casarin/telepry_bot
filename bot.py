@@ -9,6 +9,7 @@ from telegram.ext import (
     JobQueue)
 
 from teleborsa import news
+from telequota import prezzo
 
 import os
 
@@ -17,16 +18,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
-
-def get_token(TOKEN):
-    api_token = os.getenv(TOKEN)
-
-    if not api_token:
-        raise ValueErorr('No API token found')
-    else:
-        print(f'Debug api token: {api_token}')
-        return api_token
-
 
 async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id in ALLOWED_USERS:
@@ -44,12 +35,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         next_run = (next_run + timedelta(hours=1)).replace(minute=0)
 
-    async def job_callback(context):
+    jobs = context.job_queue.jobs()
+
+    job_exists = any(job.name == "news_job" for job in jobs)
+
+    if job_exists:
+        await update.message.reply_text(
+            f"Already scheduled!"
+        )
+        raise ApplicationHandlerStop
+
+    async def news_job(context):
         #print(f"Job callback triggered with context: {context}")
         asyncio.create_task(update_news_job(context))
 
     context.job_queue.run_repeating(
-        job_callback,
+        news_job,
         interval = 30*60,
         chat_id=group_id,
         first = (next_run - now).total_seconds())
@@ -64,6 +65,7 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.job_queue.stop()
     await update.message.reply_text("Recurring jobs have been stopped!")
 
+
 async def update_news_job(context: ContextTypes.DEFAULT_TYPE):
        # print(f"update_news_job triggered with context: {context}")
         chat_id=group_id
@@ -76,24 +78,35 @@ async def update_news_job(context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
+async def get_current_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    price = prezzo()
+    await context.bot.send_message(
+        chat_id=group_id,
+        text=price
+    )
+
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text= update.message.text
     )
 
-async def invio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=group_id,
         text='funziona'
     )
 
-async def caps(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text_caps = ' '.join(context.args).upper()
-    await context.bot.send_message(
-        chat_id = update.effective_chat.id,
-        text = text_caps
-    )
+async def list_jobs(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    jobs = context.job_queue.jobs()
+    if not jobs:
+        await update.message.reply_text("No jobs are currently scheduled.")
+    else:
+        message = "Scheduled Jobs:\n"
+        for job in jobs:
+            next_run = job.next_t if job.next_t else "Unknown"
+            message += f"- {job.name}: next run at {next_run}\n"
+        await update.message.reply_text(message)
 
 async def mex(update: Update, context: ContextTypes.DEFAULT_TYPE, testo: str):
     text_input = testo
@@ -102,7 +115,7 @@ async def mex(update: Update, context: ContextTypes.DEFAULT_TYPE, testo: str):
         text= text_input
     )
 
-async def update_news(update: Update, context: ContextTypes.DEFAULT_TYPE, auto=False):
+async def update_news(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await mex(update, context, "in lavorazione")
 
     df = news()
@@ -112,14 +125,9 @@ async def update_news(update: Update, context: ContextTypes.DEFAULT_TYPE, auto=F
                 messaggio = (f"{row['date']} -- {row['news']} -- {row['link']}")
                 await mex(update, context, messaggio)
     except:
-        if auto == False:
-            await mex(update, context, "Now updated news avaiable!")
-        else:
-            pass
+        await mex(update, context, "Now updated news avaiable!")
 
 def main():
-
-   # api_token = get_token('TOKEN')
 
     parser = argparse.ArgumentParser()
 
@@ -145,22 +153,22 @@ def main():
     application.add_handler(handler, -1)
 
     start_handler = CommandHandler('start', start)
-    invio_handler = CommandHandler('invio', invio)
+    invio_handler = CommandHandler('test', test)
+    jobs_handler = CommandHandler('list_jobs', list_jobs)
     echo_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), echo)
-    caps_handler = CommandHandler('caps', caps)
     update_handler = CommandHandler('update_news', update_news)
     stop_handler = CommandHandler('stop', stop)
+    current_price_handler = CommandHandler('get_price', get_current_price)
 
     application.add_handler(start_handler)
     application.add_handler(stop_handler)
+    application.add_handler(jobs_handler)
     application.add_handler(echo_handler)
-    application.add_handler(caps_handler)
     application.add_handler(invio_handler)
     application.add_handler(update_handler)
-
+    application.add_handler(current_price_handler)
 
     application.run_polling()
 
 if __name__ == '__main__':
     main()
-
