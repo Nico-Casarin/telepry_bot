@@ -10,6 +10,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from fake_useragent import UserAgent
 
 import time
+from datetime import datetime, timedelta
 
 import os
 
@@ -20,7 +21,10 @@ class storage_manager:
     def load_data(self):
         if os.path.exists(self.storage_path):
             return pl.read_parquet(self.storage_path)
-        return pl.DataFrame([])
+        return pl.DataFrame({
+            "price": pl.Series([], dtype=pl.Float64),
+            "timestamp": pl.Series([], dtype=pl.Datetime)
+        })
 
     def save_data(self, data):
         data.write_parquet(self.storage_path)
@@ -49,6 +53,11 @@ def init_driver(url):
     #price = page.find(id='ctl00_phContents_ctlHeader_lblPrice').text
     #print(price)
 
+    current_data = pl.DataFrame({
+        "price": pl.Series([], dtype=pl.Float64),
+        "timestamp": pl.Series([], dtype=pl.Datetime)
+    })
+
     try:
        driver.get(url)
        wait_for_page_to_load(driver)
@@ -59,15 +68,42 @@ def init_driver(url):
        last_update = driver.find_element(By.XPATH,
                                          '/html/body/form/div[3]/div/div[2]/div[1]/div[2]/p/strong').text
        print(last_update)
-       return(price)
+       price = float(price.replace(",","."))
+       last_update = datetime.combine(
+           datetime.strptime(last_update.strip(), "%d/%m/%Y"),
+           (datetime.now() - timedelta(minutes=15)).time()
+       )
+
+       new_row = pl.DataFrame({
+           "price": [price],
+           "timestamp": [last_update]
+       })
+
+       return(new_row)
 
     finally:
         driver.quit()
 
 
 def prezzo():
-    price = init_driver('https://www.teleborsa.it/azioni/prysmian-pry-it0004176001-SVQwMDA0MTc2MDAx')
-    return(price)
+    data_manager = storage_manager('stock.parquet')
+    stock_data = data_manager.load_data()
+    print(stock_data)
+
+    start_time = datetime.strptime("08:00", "%H:%M").time()
+    end_time = datetime.strptime("16:30", "%H:%M").time()
+
+    new_row = init_driver('https://www.teleborsa.it/azioni/prysmian-pry-it0004176001-SVQwMDA0MTc2MDAx')
+    print(new_row)
+
+    filtered_row = new_row.filter(
+        (new_row["timestamp"].dt.time() >= start_time) &
+        (new_row["timestamp"].dt.time() <= end_time)
+    )
+
+    if filtered_row.shape[0] > 0:
+        stock_data = stock_data.vstack(filtered_row)
+        data_manager.save_data(stock_data)
 
 if __name__=="__main__":
     prezzo()

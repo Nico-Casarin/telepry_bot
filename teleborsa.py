@@ -75,14 +75,14 @@ def init_driver(url):
 
         for element in elements:
             company = element.find_element(By.CLASS_NAME, 'news-azienda').text
-            title = element.find_element(By.CLASS_NAME, 'news-title').text  
-            link = element.find_element(By.CLASS_NAME, 'news-title').find_element(By.TAG_NAME, 'a').get_attribute('href')  
-            date = element.find_element(By.CLASS_NAME, 'news-data').text  
+            title = element.find_element(By.CLASS_NAME, 'news-title').text
+            link = element.find_element(By.CLASS_NAME, 'news-title').find_element(By.TAG_NAME, 'a').get_attribute('href')
+            date = element.find_element(By.CLASS_NAME, 'news-data').text
             data.append([company, title, link, date])
 
         data = pl.DataFrame(data, schema=["company", "news", 'link', "date"], orient="row")
 
-        data = data.with_columns(    pl.col("date").str.strptime(pl.Datetime, "%d/%m/%Y - %H:%M"))   
+        data = data.with_columns(    pl.col("date").str.strptime(pl.Datetime, "%d/%m/%Y - %H:%M"))
         return data
     finally:
         driver.quit()
