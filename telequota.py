@@ -13,19 +13,23 @@ import time
 
 import os
 
-def load_storage_data(storage_path):
-    if os.path.exists(storage_path):
-        return pl.read_parquet(storage_path)
-    return pl.DataFrame([])
+class storage_manager:
+    def __init__(self, storage_path):
+        self.storage_path = storage_path
+
+    def load_data(self):
+        if os.path.exists(self.storage_path):
+            return pl.read_parquet(self.storage_path)
+        return pl.DataFrame([])
+
+    def save_data(self, data):
+        data.write_parquet(self.storage_path)
 
 def ua_picker():
     ua = UserAgent()
     user_agent = ua.random
     print(user_agent)
     return(user_agent)
-
-def save_storage_data(storage_path, data):
-    data.write_parquet(storage_path)
 
 def wait_for_page_to_load(driver, timeout=30):
     ###Wait until the page is fully loaded

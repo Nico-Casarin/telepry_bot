@@ -13,19 +13,24 @@ import time
 
 import os
 
-def load_storage_data(storage_path):
-    if os.path.exists(storage_path):
-        return pl.read_parquet(storage_path)
-    return pl.DataFrame([])
+class storage_manager:
+      def __init__(self, storage_path):
+          self.storage_path = storage_path
+
+      def load_data(self):
+          if os.path.exists(self.storage_path):
+              return pl.read_parquet(self.storage_path)
+          return pl.DataFrame([])
+
+      def save_data(self, data):
+          data.write_parquet(self.storage_path)
+          return pl.DataFrame([])
 
 def ua_picker():
     ua = UserAgent()
     user_agent = ua.random
     print(user_agent)
     return(user_agent)
-
-def save_storage_data(storage_path, data):
-    data.write_parquet(storage_path)
 
 def find_new_news(current_news, previous_news):
     if not previous_news.is_empty():
@@ -95,9 +100,9 @@ def collect(url, previous_news):
 def news():
     urls = ["https://www.emarketstorage.it/it/comunicati-finanziari", "https://www.emarketstorage.it/it/documenti"]
     all_new_news = pl.DataFrame([])
-    storage_path = 'news.parquet'
+    news_manager = storage_manager('news.parquet')
 
-    previous_news = load_storage_data(storage_path)
+    previous_news = news_manager.load_data()
     print(previous_news.head(5))
 
     for url in urls:
@@ -113,7 +118,7 @@ def news():
                                                                                   'date']).sort('date',
                                                                                                descending=True)
         print(f'updated is: {updated_storage}')
-        save_storage_data(storage_path, updated_storage)
+        news_manager.save_data(updated_storage)
         print(all_new_news)
         return(all_new_news)
     else:
