@@ -33,7 +33,6 @@ def wait_for_page_to_load(driver, timeout=30):
         lambda d: d.execute_script("return document.readyState") == "complete"
     )
 
-
 def init_driver(url):
     firefox_profile = FirefoxProfile()
     firefox_profile.set_preference("general.useragent.override", ua_picker())
@@ -42,8 +41,6 @@ def init_driver(url):
     firefox_options.profile = firefox_profile
     driver = webdriver.Firefox(options = firefox_options)
     wait = WebDriverWait(driver, 90)
-
-
 
     #price = page.find(id='ctl00_phContents_ctlHeader_lblPrice').text
     #print(price)

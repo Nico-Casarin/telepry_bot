@@ -36,6 +36,39 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         next_run = (next_run + timedelta(hours=1)).replace(minute=0)
 
     jobs = context.job_queue.jobs()
+    job_exists = any(job.name == "news_job" for job in jobs)
+
+    if job_exists:
+        await update.message.reply_text(
+            f"Already scheduled!"
+        )
+        raise ApplicationHandlerStop
+
+    context.job_queue.run_repeating(
+        update_news_job,
+        interval = 30*60,
+        chat_id=group_id,
+        first = (next_run - now).total_seconds())
+
+    formatted_time = next_run.strftime("%H:%M:%S")
+
+    await update.message.reply_text(
+        f"Scheduling started. Next run at: {formatted_time}"
+    )
+
+async def start_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    now = datetime.now()
+    next_run = now.replace(second=0, microsecond=0)
+    if now.minute < 15:
+        next_run = next_run.replace(minute=15)
+    elif now.minute < 30:
+        next_run = next_run.replace(minute=30)
+    elif now.minute < 45:
+        next_run = next_run.replace(minute=45)
+    else:
+        next_run = (next_run + timedelta(hours=1)).replace(minute=0)
+
+    jobs = context.job_queue.jobs()
 
     job_exists = any(job.name == "news_job" for job in jobs)
 
@@ -45,15 +78,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         raise ApplicationHandlerStop
 
-    async def news_job(context):
+    async def schedule_stock_job(context):
         #print(f"Job callback triggered with context: {context}")
-        asyncio.create_task(update_news_job(context))
+        asyncio.create_task(stock_job(context))
 
-    context.job_queue.run_repeating(
-        news_job,
-        interval = 30*60,
-        chat_id=group_id,
-        first = (next_run - now).total_seconds())
+    context.job_queue.run_once(
+        schedule_stock_job,
+        when=(next_run - now).total_seconds(),
+        chat_id=group_id)
 
     formatted_time = next_run.strftime("%H:%M:%S")
 
@@ -65,18 +97,50 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.job_queue.stop()
     await update.message.reply_text("Recurring jobs have been stopped!")
 
-
 async def update_news_job(context: ContextTypes.DEFAULT_TYPE):
        # print(f"update_news_job triggered with context: {context}")
         chat_id=group_id
-
         try:
             df = news()
             for row in df.iter_rows(named=True):
                 messaggio = f"{row['date']} -- {row['news']} -- {row['link']}"
                 await context.bot.send_message(chat_id=group_id, text=messaggio)
-        except:
-            pass
+        except Exception as e:
+            await context.bot.send_message(chat_id=group_id, text= f"Error in un update news job: {e}")
+
+async def stock_job(context: ContextTypes.DEFAULT_TYPE):
+       # print(f"update_news_job triggered with context: {context}")
+        chat_id=group_id
+        try:
+           df = [1]
+           for row in df.iter_rows(named=True):
+                messaggio = f"{row['date']} -- {row['news']} -- {row['link']}"
+                await context.bot.send_message(chat_id=group_id, text=messaggio)
+        except Exception as e:
+            await context.bot.send_message(chat_id=group_id, text= f"Error in un update news job: {e}")
+
+        now = datetime.now()
+
+        next_run = now.replace(second=0, microsecond=0)
+
+        if now.hour >= 18:  # After 18:00, schedule for 8:00 the next day
+            next_run = (next_run + timedelta(days=1)).replace(hour=8, minute=0)
+        elif now.minute < 15:
+            next_run = next_run.replace(minute=15)
+        elif now.minute < 30:
+            next_run = next_run.replace(minute=30)
+        elif now.minute < 45:
+            next_run = next_run.replace(minute=45)
+        else:
+            next_run = (next_run + timedelta(hours=1)).replace(minute=0)
+
+        # Schedule the next run dynamically
+        context.job_queue.run_once(
+            stock_job,
+            when=(next_run - now).total_seconds(),
+            chat_id=chat_id,
+            name="stock_job"
+        )
 
 async def get_current_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     price = prezzo()
@@ -127,6 +191,7 @@ async def update_news(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         await mex(update, context, "Now updated news avaiable!")
 
+
 def main():
 
     parser = argparse.ArgumentParser()
@@ -152,7 +217,9 @@ def main():
     handler = TypeHandler(Update, callback)
     application.add_handler(handler, -1)
 
+
     start_handler = CommandHandler('start', start)
+    stock_handler = CommandHandler('start_stock', start_stock)
     invio_handler = CommandHandler('test', test)
     jobs_handler = CommandHandler('list_jobs', list_jobs)
     echo_handler = MessageHandler(filters.TEXT & (~filters.COMMAND), echo)
@@ -161,6 +228,7 @@ def main():
     current_price_handler = CommandHandler('get_price', get_current_price)
 
     application.add_handler(start_handler)
+    application.add_handler(stock_handler)
     application.add_handler(stop_handler)
     application.add_handler(jobs_handler)
     application.add_handler(echo_handler)
