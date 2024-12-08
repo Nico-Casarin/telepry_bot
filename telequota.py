@@ -29,60 +29,122 @@ class storage_manager:
     def save_data(self, data):
         data.write_parquet(self.storage_path)
 
-def ua_picker():
-    ua = UserAgent()
-    user_agent = ua.random
-    print(user_agent)
-    return(user_agent)
+class WebDriverManager:
+    def __init__(self, headless=True, driver_path=None):
 
-def wait_for_page_to_load(driver, timeout=30):
-    ###Wait until the page is fully loaded
-    WebDriverWait(driver, timeout).until(
-        lambda d: d.execute_script("return document.readyState") == "complete"
-    )
+        self.headless = headless
+        self.driver_path = driver_path
+        self.driver = None
 
-def init_driver(url):
-    firefox_profile = FirefoxProfile()
-    firefox_profile.set_preference("general.useragent.override", ua_picker())
-    firefox_options = Options()
-    firefox_options.add_argument('--headless')
-    firefox_options.profile = firefox_profile
-    driver = webdriver.Firefox(options = firefox_options)
-    wait = WebDriverWait(driver, 90)
+    def ua_picker(self):
+        ua = UserAgent()
+        user_agent = ua.random
+        print(user_agent)
+        return(user_agent)
 
-    #price = page.find(id='ctl00_phContents_ctlHeader_lblPrice').text
-    #print(price)
+    def wait_for_page_to_load(self, timeout=30):
+        WebDriverWait(driver, timeout).until(
+            lambda d: d.execute_script("return document.readyState") == "complete"
+        )
 
-    current_data = pl.DataFrame({
-        "price": pl.Series([], dtype=pl.Float64),
-        "timestamp": pl.Series([], dtype=pl.Datetime)
-    })
+    def quit_driver(self):
+        if self.driver:
+            self.driver.quit()
+
+    def init_driver(self):
+        firefox_profile = FirefoxProfile()
+        firefox_profile.set_preference("general.useragent.override", self.ua_picker())
+        firefox_options = Options()
+        if self.headless:
+            firefox_options.add_argument('--headless')
+        firefox_options.profile = firefox_profile
+
+        serice = Service(self.driver_path) if self.driver_path else None
+        return self.driver
+
+
+#def init_driver(url):
+#    firefox_profile = FirefoxProfile()
+#    firefox_profile.set_preference("general.useragent.override", ua_picker())
+#    firefox_options = Options()
+#    firefox_options.add_argument('--headless')
+#    firefox_options.profile = firefox_profile
+#    driver = webdriver.Firefox(options = firefox_options)
+#    wait = WebDriverWait(driver, 90)
+#
+#    #price = page.find(id='ctl00_phContents_ctlHeader_lblPrice').text
+#    #print(price)
+#
+#    current_data = pl.DataFrame({
+#        "price": pl.Series([], dtype=pl.Float64),
+#        "timestamp": pl.Series([], dtype=pl.Datetime)
+#    })
+#
+#    try:
+#       driver.get(url)
+#       wait_for_page_to_load(driver)
+#
+#       price = driver.find_element(By.ID, 'ctl00_phContents_ctlHeader_lblPrice').text
+#       print(price)
+#
+#       last_update = driver.find_element(By.XPATH,
+#                                         '/html/body/form/div[3]/div/div[2]/div[1]/div[2]/p/strong').text
+#       print(last_update)
+#       price = float(price.replace(",","."))
+#       last_update = datetime.combine(
+#           datetime.strptime(last_update.strip(), "%d/%m/%Y"),
+#           (datetime.now() - timedelta(minutes=15)).time()
+#       )
+#
+#       new_row = pl.DataFrame({
+#           "price": [price],
+#           "timestamp": [last_update]
+#       })
+#
+#       return(new_row)
+#
+#    finally:
+#        driver.quit()
+
+def fetch_price(url, headless=True, driver_path=None):
+
+    manager = WebDriverManager(headless=headless, driver_path=driver_path)
+    driver = manager.init_driver()
 
     try:
-       driver.get(url)
-       wait_for_page_to_load(driver)
+        driver.get(url)
+        manager.wait_for_page_to_load()
 
-       price = driver.find_element(By.ID, 'ctl00_phContents_ctlHeader_lblPrice').text
-       print(price)
+        price = driver.find_element(By.ID, 'ctl00_phContents_ctlHeader_lblPrice').text
 
-       last_update = driver.find_element(By.XPATH,
-                                         '/html/body/form/div[3]/div/div[2]/div[1]/div[2]/p/strong').text
-       print(last_update)
-       price = float(price.replace(",","."))
-       last_update = datetime.combine(
-           datetime.strptime(last_update.strip(), "%d/%m/%Y"),
-           (datetime.now() - timedelta(minutes=15)).time()
-       )
+        last_update = driver.find_element(By.XPATH,
+                                          '/html/body/form/div[3]/div/div[2]/div[1]/div[2]/p/strong').text
 
-       new_row = pl.DataFrame({
-           "price": [price],
-           "timestamp": [last_update]
-       })
+        price = float(price.replace(",", "."))
+        last_update = datetime.combine(
+            datetime.strptime(last_update.strip(), "%d/%m/%Y"),
+            (datetime.now() - timedelta(minutes=15)).time()
+        )
 
-       return(new_row)
+        # Create a DataFrame with the extracted data
+        new_row = pl.DataFrame({
+            "price": [price],
+            "timestamp": [last_update]
+        })
+
+        return new_row
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return pl.DataFrame({
+            "price": pl.Series([], dtype=pl.Float64),
+            "timestamp": pl.Series([], dtype=pl.Datetime)
+        })
 
     finally:
-        driver.quit()
+        # Quit the driver after use
+        manager.quit_driver()
+
 
 
 def prezzo():
@@ -93,7 +155,11 @@ def prezzo():
     start_time = datetime.strptime("08:00", "%H:%M").time()
     end_time = datetime.strptime("16:30", "%H:%M").time()
 
-    new_row = init_driver('https://www.teleborsa.it/azioni/prysmian-pry-it0004176001-SVQwMDA0MTc2MDAx')
+    new_row = fetch_price(
+        url='https://www.teleborsa.it/azioni/prysmian-pry-it0004176001-SVQwMDA0MTc2MDAx',
+       # driver_path='/home/nicolacasarin/driver/geckodriver',  # Specify the driver path here if needed
+        headless=True
+    )
     print(new_row)
 
     filtered_row = new_row.filter(
