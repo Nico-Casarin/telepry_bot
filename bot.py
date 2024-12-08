@@ -64,7 +64,7 @@ async def start_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif now.minute < 30:
         next_run = next_run.replace(minute=30)
     elif now.minute < 45:
-        next_run = next_run.replace(minute=45)
+        next_run = next_run.replace(minute=40)
     else:
         next_run = (next_run + timedelta(hours=1)).replace(minute=0)
 
@@ -78,12 +78,8 @@ async def start_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         raise ApplicationHandlerStop
 
-    async def schedule_stock_job(context):
-        #print(f"Job callback triggered with context: {context}")
-        asyncio.create_task(stock_job(context))
-
     context.job_queue.run_once(
-        schedule_stock_job,
+        stock_job,
         when=(next_run - now).total_seconds(),
         chat_id=group_id)
 
@@ -112,12 +108,12 @@ async def stock_job(context: ContextTypes.DEFAULT_TYPE):
        # print(f"update_news_job triggered with context: {context}")
         chat_id=group_id
         try:
-           df = [1]
+           df = prezzo(driver_path = driver_path_input)
            for row in df.iter_rows(named=True):
-                messaggio = f"{row['date']} -- {row['news']} -- {row['link']}"
+                messaggio = (f"{row['price']}\u20ac  -- at {row['timestamp']}")
                 await context.bot.send_message(chat_id=group_id, text=messaggio)
         except Exception as e:
-            await context.bot.send_message(chat_id=group_id, text= f"Error in un update news job: {e}")
+            await context.bot.send_message(chat_id=group_id, text= f"Error in stock job: {e}")
 
         now = datetime.now()
 
@@ -134,7 +130,6 @@ async def stock_job(context: ContextTypes.DEFAULT_TYPE):
         else:
             next_run = (next_run + timedelta(hours=1)).replace(minute=0)
 
-        # Schedule the next run dynamically
         context.job_queue.run_once(
             stock_job,
             when=(next_run - now).total_seconds(),
@@ -143,12 +138,12 @@ async def stock_job(context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def get_current_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    price = prezzo()
-    print(f"il prezzo df e; {price}")
+    price = prezzo(driver_path = driver_path_input)
+    #print(f"il prezzo df e; {price}")
     try:
         if not price.is_empty():
             for row in price.iter_rows(named=True):
-                messaggio = (f"{row['price']} -- {row['timestamp']}")
+                messaggio = (f"{row['price']}\u20ac  -- at {row['timestamp']}")
                 await mex(update, context, messaggio)
     except:
         await mex(update, context, "Now updated news avaiable!")
@@ -203,8 +198,13 @@ def main():
     parser.add_argument('-t', '--token', help = 'Bot Token', required = True)
     parser.add_argument('-a', '--allowed',type=int, nargs='+', help = 'Allowed users IDs')
     parser.add_argument('-g', '--group', help = 'ID of receiving group chat', required=True)
+    parser.add_argument('-d', '--driver', help = 'Custom path for Geckodriver', required=False)
 
     args = parser.parse_args()
+
+    global driver_path_input
+    driver_path_input = args.driver if args.driver else None
+    print(driver_path_input)
 
     api_token = args.token
     global ALLOWED_USERS
