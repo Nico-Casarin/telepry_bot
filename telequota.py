@@ -11,7 +11,6 @@ from fake_useragent import UserAgent
 
 import time
 from datetime import datetime, timedelta
-
 import os
 
 class storage_manager:
@@ -31,7 +30,6 @@ class storage_manager:
 
 class WebDriverManager:
     def __init__(self, headless=True, driver_path=None):
-
         self.headless = headless
         self.driver_path = driver_path
         self.driver = None
@@ -43,9 +41,10 @@ class WebDriverManager:
         return(user_agent)
 
     def wait_for_page_to_load(self, timeout=30):
-        WebDriverWait(driver, timeout).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
-        )
+        if self.driver:
+            WebDriverWait(self.driver, timeout).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
 
     def quit_driver(self):
         if self.driver:
@@ -59,7 +58,9 @@ class WebDriverManager:
             firefox_options.add_argument('--headless')
         firefox_options.profile = firefox_profile
 
-        serice = Service(self.driver_path) if self.driver_path else None
+        service = Service(self.driver_path) if self.driver_path else None
+        self.driver = webdriver.Firefox(service=service, options=firefox_options)
+        print(f"Driver initiazioled: {self.driver}")
         return self.driver
 
 
@@ -109,9 +110,14 @@ class WebDriverManager:
 def fetch_price(url, headless=True, driver_path=None):
 
     manager = WebDriverManager(headless=headless, driver_path=driver_path)
-    driver = manager.init_driver()
+    driver = None
+    print(driver)
 
     try:
+        print("Initializing driver")
+        driver = manager.init_driver()
+
+        print(f"navigating to url: {url}")
         driver.get(url)
         manager.wait_for_page_to_load()
 
@@ -135,6 +141,7 @@ def fetch_price(url, headless=True, driver_path=None):
         return new_row
 
     except Exception as e:
+        print(driver)
         print(f"An error occurred: {e}")
         return pl.DataFrame({
             "price": pl.Series([], dtype=pl.Float64),
@@ -142,12 +149,11 @@ def fetch_price(url, headless=True, driver_path=None):
         })
 
     finally:
-        # Quit the driver after use
         manager.quit_driver()
 
 
+def prezzo(driver_path=None):
 
-def prezzo():
     data_manager = storage_manager('stock.parquet')
     stock_data = data_manager.load_data()
     print(stock_data)
@@ -155,9 +161,11 @@ def prezzo():
     start_time = datetime.strptime("08:00", "%H:%M").time()
     end_time = datetime.strptime("16:30", "%H:%M").time()
 
+    driver_path = driver_path if driver_path else None
+
     new_row = fetch_price(
         url='https://www.teleborsa.it/azioni/prysmian-pry-it0004176001-SVQwMDA0MTc2MDAx',
-       # driver_path='/home/nicolacasarin/driver/geckodriver',  # Specify the driver path here if needed
+        driver_path = driver_path,
         headless=True
     )
     print(new_row)
@@ -170,6 +178,8 @@ def prezzo():
     if filtered_row.shape[0] > 0:
         stock_data = stock_data.vstack(filtered_row)
         data_manager.save_data(stock_data)
+
+    return(new_row)
 
 if __name__=="__main__":
     prezzo()

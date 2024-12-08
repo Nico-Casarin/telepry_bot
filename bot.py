@@ -144,10 +144,14 @@ async def stock_job(context: ContextTypes.DEFAULT_TYPE):
 
 async def get_current_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     price = prezzo()
-    await context.bot.send_message(
-        chat_id=group_id,
-        text=price
-    )
+    print(f"il prezzo df e; {price}")
+    try:
+        if not price.is_empty():
+            for row in price.iter_rows(named=True):
+                messaggio = (f"{row['price']} -- {row['timestamp']}")
+                await mex(update, context, messaggio)
+    except:
+        await mex(update, context, "Now updated news avaiable!")
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
