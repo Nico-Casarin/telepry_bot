@@ -152,6 +152,11 @@ def prezzo(driver_path=None):
 
     return new_row
 
+def print_stock():
+    data_manager = storage_manager('stock.parquet')
+    stock_data = data_manager.load_data()
+    return stock_data.head()
+
 if __name__=="__main__":
     prezzo()
 

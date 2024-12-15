@@ -9,7 +9,7 @@ from telegram.ext import (
     JobQueue)
 
 from teleborsa import news
-from telequota import prezzo
+from telequota import prezzo,print_stock
 
 import os
 
@@ -36,7 +36,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         next_run = (next_run + timedelta(hours=1)).replace(minute=0)
 
     jobs = context.job_queue.jobs()
-    job_exists = any(job.name == "news_job" for job in jobs)
+    job_exists = any(job.name == "update_news_job" for job in jobs)
 
     if job_exists:
         await update.message.reply_text(
@@ -70,7 +70,7 @@ async def start_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     jobs = context.job_queue.jobs()
 
-    job_exists = any(job.name == "news_job" for job in jobs)
+    job_exists = any(job.name == "stock_job" for job in jobs)
 
     if job_exists:
         await update.message.reply_text(
@@ -93,6 +93,15 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.job_queue.stop()
     await update.message.reply_text("Recurring jobs have been stopped!")
 
+async def get_last_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        df = print_stock()
+        for row in df.iter_rows(named=True):
+            messaggio = f"{row['price']} -- {row['timestamp']}"
+            await context.bot.send_message(chat_id=group_id, text=messaggio)
+    except Exception as e:
+        await context.bot.send_message(chat_id=group_id, text= f"Error in un update news job: {e}")
+
 async def update_news_job(context: ContextTypes.DEFAULT_TYPE):
        # print(f"update_news_job triggered with context: {context}")
         chat_id=group_id
@@ -107,13 +116,13 @@ async def update_news_job(context: ContextTypes.DEFAULT_TYPE):
 async def stock_job(context: ContextTypes.DEFAULT_TYPE):
        # print(f"update_news_job triggered with context: {context}")
         chat_id=group_id
-        try:
-           df = prezzo(driver_path = driver_path_input)
-           for row in df.iter_rows(named=True):
-                messaggio = (f"{row['price']}\u20ac  -- at {row['timestamp']}")
-                await context.bot.send_message(chat_id=group_id, text=messaggio)
-        except Exception as e:
-            await context.bot.send_message(chat_id=group_id, text= f"Error in stock job: {e}")
+#        try:
+#           df = prezzo(driver_path = driver_path_input)
+#           for row in df.iter_rows(named=True):
+#                messaggio = (f"{row['price']}\u20ac  -- at {row['timestamp']}")
+#                await context.bot.send_message(chat_id=group_id, text=messaggio)
+#        except Exception as e:
+#            await context.bot.send_message(chat_id=group_id, text= f"Error in stock job: {e}")
 
         now = datetime.now()
 
@@ -223,6 +232,7 @@ def main():
 
 
     start_handler = CommandHandler('start', start)
+    last_stock = CommandHandler('last_stock', get_last_stock)
     stock_handler = CommandHandler('start_stock', start_stock)
     invio_handler = CommandHandler('test', test)
     jobs_handler = CommandHandler('list_jobs', list_jobs)
@@ -233,6 +243,7 @@ def main():
 
     application.add_handler(start_handler)
     application.add_handler(stock_handler)
+    application.add_handler(last_stock)
     application.add_handler(stop_handler)
     application.add_handler(jobs_handler)
     application.add_handler(echo_handler)
