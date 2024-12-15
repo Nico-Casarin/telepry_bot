@@ -1,3 +1,7 @@
+import time
+from datetime import datetime, timedelta
+import os
+
 import polars as pl
 
 from selenium import webdriver
@@ -10,9 +14,6 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from fake_useragent import UserAgent
 
-import time
-from datetime import datetime, timedelta
-import os
 
 class storage_manager:
     def __init__(self, storage_path):
@@ -61,7 +62,7 @@ class WebDriverManager:
 
         service = Service(self.driver_path) if self.driver_path else None
         self.driver = webdriver.Firefox(service=service, options=firefox_options)
-        print(f"Driver initiazioled: {self.driver}")
+        print(f"Driver initialized: {self.driver}")
         return self.driver
 
 
@@ -84,11 +85,24 @@ def fetch_price(url, headless=True, driver_path=None):
         last_update = driver.find_element(By.XPATH,
                                           '/html/body/form/div[3]/div/div[2]/div[1]/div[2]/p/strong').text
 
+        print(last_update)
+        try:
+            last_update = datetime.strptime(last_update.strip(), "%d/%m/%Y %H.%M")
+        except ValueError:
+            try:
+                last_update = datetime.combine(
+                    datetime.strptime(last_update.strip(), "%d/%m/%Y"),
+                    (datetime.now() - timedelta(minutes=15)).time())
+            except Exception:
+                last_update = datetime.now()
+
+
         price = float(price.replace(",", "."))
-        last_update = datetime.combine(
-            datetime.strptime(last_update.strip(), "%d/%m/%Y"),
-            (datetime.now() - timedelta(minutes=15)).time()
-        )
+        #last_update = datetime.combine(
+         #   parsed_date,
+            #datetime.strptime(last_update.strip(), "%d/%m/%Y %H.%M"),
+          #  (datetime.now() - timedelta(minutes=15)).time()
+        #)
 
         # Create a DataFrame with the extracted data
         new_row = pl.DataFrame({
@@ -109,7 +123,6 @@ def fetch_price(url, headless=True, driver_path=None):
     finally:
         manager.quit_driver()
 
-
 def prezzo(driver_path=None):
 
     data_manager = storage_manager('stock.parquet')
@@ -126,7 +139,7 @@ def prezzo(driver_path=None):
         driver_path = driver_path,
         headless=True
     )
-    print(new_row)
+    print(f"new row is {new_row}")
 
     filtered_row = new_row.filter(
         (new_row["timestamp"].dt.time() >= start_time) &
@@ -137,7 +150,8 @@ def prezzo(driver_path=None):
         stock_data = stock_data.vstack(filtered_row)
         data_manager.save_data(stock_data)
 
-    return(new_row)
+    return new_row
 
 if __name__=="__main__":
     prezzo()
+
