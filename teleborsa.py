@@ -2,6 +2,7 @@ import polars as pl
 
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.firefox.firefox_profile import FirefoxProfile
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -52,10 +53,11 @@ def wait_for_page_to_load(driver, timeout=30):
 def init_driver(url):
     firefox_profile = FirefoxProfile()
     firefox_profile.set_preference("general.useragent.override", ua_picker())
+    service = Service('/home/nicolacasarin/telepry_bot/geckodriver')
     firefox_options = Options()
     firefox_options.add_argument('--headless')
     firefox_options.profile = firefox_profile
-    driver = webdriver.Firefox(options = firefox_options)
+    driver = webdriver.Firefox(service = service, options = firefox_options)
     wait = WebDriverWait(driver, 90)
 
     try:
@@ -96,6 +98,19 @@ def collect(url, previous_news):
             [],
             schema={"company": pl.Utf8, "news": pl.Utf8, "link": pl.Utf8, "date": pl.Datetime}
         )
+
+def news_head(n=1):
+    news_manager = storage_manager('news.parquet')
+    previous_news = news_manager.load_data()
+
+    try:
+        head_news = previous_news.head(n)
+        return(head_news)
+    except:
+        return pl.DataFrame([],
+            schema={"company": pl.Utf8, "news": pl.Utf8, "link": pl.Utf8, "date": pl.Datetime}
+        )
+
 
 def news():
     urls = ["https://www.emarketstorage.it/it/comunicati-finanziari", "https://www.emarketstorage.it/it/documenti"]

@@ -8,7 +8,7 @@ from telegram.ext import (
     MessageHandler, TypeHandler , ApplicationHandlerStop,
     JobQueue)
 
-from teleborsa import news
+from teleborsa import news,news_head
 from telequota import prezzo,print_stock
 
 import os
@@ -155,7 +155,7 @@ async def get_current_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 messaggio = (f"{row['price']}\u20ac  -- at {row['timestamp']}")
                 await mex(update, context, messaggio)
     except:
-        await mex(update, context, "Now updated news avaiable!")
+        await mex(update, context, "Now updated news available!")
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
@@ -196,9 +196,29 @@ async def update_news(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for row in df.iter_rows(named=True):
                 messaggio = (f"{row['date']} -- {row['news']} -- {row['link']}")
                 await mex(update, context, messaggio)
+        elif df.is_empty():
+            await mex(update, context, "No updated news available!")
     except:
-        await mex(update, context, "Now updated news avaiable!")
+        await mex(update, context, "No updated news available!")
 
+async def head_news(update: Update, context: ContextTypes.DEFAULT_TYPE):
+ 
+    df = news_head()
+    try:
+        if not df.is_empty():
+            for row in df.iter_rows(named=True):
+                messaggio = (f"{row['date']} -- {row['news']} -- {row['link']}")
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text= messaggio)
+        elif df.is_empty():
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text= "No news available")
+    except:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text= "No news available")
 
 def main():
 
@@ -240,6 +260,7 @@ def main():
     update_handler = CommandHandler('update_news', update_news)
     stop_handler = CommandHandler('stop', stop)
     current_price_handler = CommandHandler('get_price', get_current_price)
+    head_news_handler = CommandHandler('head_news', head_news)
 
     application.add_handler(start_handler)
     application.add_handler(stock_handler)
@@ -250,6 +271,7 @@ def main():
     application.add_handler(invio_handler)
     application.add_handler(update_handler)
     application.add_handler(current_price_handler)
+    application.add_handler(head_news_handler) 
 
     application.run_polling()
 
